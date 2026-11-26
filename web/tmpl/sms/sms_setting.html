@@ -1,0 +1,83 @@
+<div id="innerContainer">
+    <div class="row header-row">
+        <div class="col-xs-1">
+            <a href="#home">
+                <img alt="" src="img/arrow-back.png">
+            </a>
+        </div>
+        <div class="col-xs-11">
+            <div class="form-title">
+                <h1 data-trans="smsfwd_setting"></h1>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-xs-2">
+            <div class="nav_right">
+                <ul>
+                    <li><a href="#sms" data-trans="smsfwd_records"></a></li>
+                    <li class="active"><a href="#sms_setting" data-trans="smsfwd_setting"></a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="col-xs-10">
+
+            <form id="smsFwdSettingForm">
+                <div class="form-body">
+                    <div class="content">
+                        <h3 class="form-title" data-trans="smsfwd_dingtalk"></h3>
+                        <div class="row form-group">
+                            <label class="col-xs-3 side-right" for="smsFwdWebhook" data-trans="smsfwd_webhook_label"></label>
+                            <div class="col-xs-8">
+                                <input id="smsFwdWebhook" name="smsFwdWebhook" type="text" class="form-control"
+                                       maxlength="800" placeholder="https://oapi.dingtalk.com/robot/send?access_token=xxx"/>
+                            </div>
+                        </div>
+                        <div class="row form-group">
+                            <label class="col-xs-3 side-right" for="smsFwdSecret" data-trans="smsfwd_secret"></label>
+                            <div class="col-xs-8">
+                                <input id="smsFwdSecret" name="smsFwdSecret" type="text" class="form-control"
+                                       maxlength="200" placeholder="SEC..."/>
+                            </div>
+                        </div>
+                        <div class="row form-group">
+                            <label class="col-xs-3 side-right" for="smsFwdKeyword" data-trans="smsfwd_keyword"></label>
+                            <div class="col-xs-8">
+                                <input id="smsFwdKeyword" name="smsFwdKeyword" type="text" class="form-control"
+                                       maxlength="60" placeholder="验证码"/>
+                            </div>
+                        </div>
+                        <div class="row form-group">
+                            <label class="col-xs-3 side-right" for="smsFwdInterval" data-trans="smsfwd_interval"></label>
+                            <div class="col-xs-8">
+                                <input id="smsFwdInterval" name="smsFwdInterval" type="number" class="form-control"
+                                       min="5" max="600" step="5" style="width: 120px; display: inline-block;"/>
+                                <span data-trans="smsfwd_seconds"></span>
+                            </div>
+                        </div>
+                        <div class="row form-group">
+                            <label class="col-xs-3 side-right" data-trans="smsfwd_state"></label>
+                            <div class="col-xs-8">
+                                <span id="smsFwdStateLabel" class="label label-default">-</span>
+                                <span id="smsFwdApiErr2" class="error" style="display: none; margin-left: 8px;" data-trans="smsfwd_api_off"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-buttons">
+                        <input type="submit" id="smsFwdSave" class="btn btn-primary" data-trans="smsfwd_save"/>
+                        <input type="button" id="smsFwdTest2" class="btn" data-trans="smsfwd_test"/>
+                    </div>
+                    <div class="form-note">
+                        <div class="notes-title">&nbsp;</div>
+                        <ul class="notes-content">
+                            <li data-trans="smsfwd_note_webhook"></li>
+                            <li data-trans="smsfwd_note_secret"></li>
+                            <li data-trans="smsfwd_note_keyword"></li>
+                            <li data-trans="smsfwd_note_save"></li>
+                        </ul>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

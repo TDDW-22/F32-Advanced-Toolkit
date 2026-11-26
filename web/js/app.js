@@ -1,0 +1,1 @@
+define(["config/menu","language","logout","status/statusBar","router","login"],function(f,g,a,d,c,b){return{init:function(){f.init(),g.init(),c.init(),a.init(),d.init()}}});

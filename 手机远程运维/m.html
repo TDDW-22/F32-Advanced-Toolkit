@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>F32 手机运维</title>
+<style>
+:root{
+  --bg:#0d1117;--card:rgba(28,36,48,.72);--line:rgba(255,255,255,.10);
+  --txt:#e8edf5;--dim:#8b97a8;--acc:#2ee6c5;--acc2:#4aa8ff;--warn:#ffb84d;--err:#ff6b6b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;padding:16px 14px 40px;background:radial-gradient(120% 80% at 50% 0%,#16202e 0%,#0d1117 60%);
+  color:var(--txt);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+h1{font-size:17px;margin:0 0 4px;letter-spacing:.5px}
+.sub{color:var(--dim);font-size:12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 8px 24px rgba(0,0,0,.28)}
+label{display:block;font-size:12px;color:var(--dim);margin:8px 0 4px}
+input,textarea,select{width:100%;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:10px;
+  color:var(--txt);padding:10px 12px;font-size:14px;font-family:inherit;outline:none}
+textarea{min-height:110px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5}
+input:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(46,230,197,.12)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:10px 16px;
+  border:none;border-radius:12px;font-size:14px;font-weight:600;color:#04121a;cursor:pointer;
+  background:linear-gradient(135deg,var(--acc) 0%,var(--acc2) 100%)}
+.btn:active{transform:scale(.98);opacity:.9}
+.btn.ghost{background:rgba(255,255,255,.08);color:var(--txt);border:1px solid var(--line)}
+.btn.warn{background:linear-gradient(135deg,#ffc457,#ff8f3c);color:#1a1200}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.row .btn{flex:1 1 auto}
+kbd{background:rgba(255,255,255,.08);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px;color:var(--acc)}
+.out{margin-top:10px;background:#070a0e;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;line-height:1.55;color:#cfe3ff;
+  white-space:pre-wrap;word-break:break-all;max-height:46vh;overflow:auto}
+.hint{font-size:11.5px;color:var(--dim);margin-top:8px}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:rgba(46,230,197,.14);color:var(--acc)}
+.err{color:var(--err)}
+.ok{color:var(--acc)}
+</style>
+</head>
+<body>
+
+<h1>F32 手机运维台</h1>
+<div class="sub">脚本写入 / 命令执行 · 走 smsapi 的 <kbd>/api/file</kbd> 与 <kbd>/api/exec</kbd></div>
+
+<div class="card">
+  <label>Token（与设备 api_key 一致，只需填一次）</label>
+  <input id="token" placeholder="例如 F32ops12345" autocomplete="off">
+  <div class="row">
+    <button class="btn ghost" onclick="saveToken()">保存到本机</button>
+    <button class="btn ghost" onclick="ping()">连接测试</button>
+  </div>
+  <div class="hint">Token 存在浏览器本地，换设备或清缓存需重填。</div>
+</div>
+
+<div class="card">
+  <label>① 写入文件（选择手机里的文件，自动分片上传）</label>
+  <input type="file" id="file" accept=".sh,.txt,.js,.css,.html,.json,*/*">
+  <label>目标路径（白名单：/mnt/userdata/etc_rw/ · /etc_ro/web/ · /sbin/ · /tmp/ 等）</label>
+  <input id="dpath" value="/mnt/userdata/etc_rw/smsfwd.conf" autocomplete="off">
+  <div class="row">
+    <button class="btn" onclick="upload(false)">上传并覆盖</button>
+    <button class="btn ghost" onclick="upload(true)">追加写入</button>
+  </div>
+  <div class="row">
+    <button class="btn ghost" onclick="readFile()">读回校验</button>
+    <button class="btn warn" onclick="run('chmod 755 '+val('dpath'))">设为可执行</button>
+  </div>
+  <div id="upout" class="out" style="display:none"></div>
+</div>
+
+<div class="card">
+  <label>② 执行命令</label>
+  <textarea id="cmd">curl -s http://127.0.0.1:8080/api/status</textarea>
+  <div class="row">
+    <button class="btn" onclick="run()">执行</button>
+    <button class="btn ghost" onclick="clearOut()">清空输出</button>
+  </div>
+  <div class="row">
+    <button class="btn ghost" data-cmd="curl -s http://127.0.0.1:8080/api/status">自检</button>
+    <button class="btn ghost" data-cmd="/sbin/smsapi && /mnt/userdata/etc_rw/smsfwd /mnt/userdata/etc_rw/smsfwd.conf start">启动服务</button>
+    <button class="btn ghost" data-cmd="pkill -f smsfwd; kill $(cat /mnt/userdata/etc_rw/smsapi.pid 2>/dev/null) 2>/dev/null; true">停止服务</button>
+  </div>
+  <div class="row">
+    <button class="btn ghost" data-cmd="ps | grep -E 'smsapi|smsfwd|atweb' | grep -v grep">查看状态</button>
+    <button class="btn ghost" data-cmd="tail -n 40 /mnt/userdata/etc_rw/smsfwd.log">转发日志</button>
+    <button class="btn ghost" data-cmd="grep -q 'smsfwd.conf start' /etc/rc || echo '( sleep 10; /mnt/userdata/etc_rw/smsfwd /mnt/userdata/etc_rw/smsfwd.conf start ) &' >> /etc/rc; tail -n 5 /etc/rc">写开机自启</button>
+  </div>
+  <div id="out" class="out" style="display:none"></div>
+</div>
+
+<div class="card">
+  <label>③ 服务状态</label>
+  <div class="row">
+    <button class="btn ghost" onclick="run('curl -s http://127.0.0.1:8080/api/status')">smsapi 状态</button>
+    <button class="btn ghost" onclick="run('ps | grep -E \'smsapi|smsfwd\' | grep -v grep')">进程列表</button>
+    <button class="btn ghost" onclick="run('uname -a; free | head -3; df -h /mnt/userdata | tail -1')">系统信息</button>
+  </div>
+</div>
+
+<script>
+const BASE = 'http://' + location.hostname + ':8080';
+const $ = id => document.getElementById(id);
+const val = id => $(id).value.trim();
+
+function saveToken(){
+  localStorage.setItem('f32token', val('token'));
+  showOut('token 已保存', true);
+}
+(function(){
+  const t = localStorage.getItem('f32token');
+  if (t) $('token').value = t;
+  if (location.hostname) {
+    document.querySelector('.sub').textContent =
+      '当前设备 ' + location.hostname + ' · 走 smsapi 的 /api/file 与 /api/exec';
+  }
+})();
+
+function showOut(text, ok){
+  const o = $('out');
+  o.style.display = 'block';
+  o.className = 'out' + (ok === true ? '' : '');
+  o.textContent = text;
+}
+function showUp(text){ const o=$('upout'); o.style.display='block'; o.textContent=text; }
+function clearOut(){ $('out').style.display='none'; $('upout').style.display='none'; }
+
+function esc(s){ return encodeURIComponent(s); }
+
+async function apiGet(path){
+  const r = await fetch(BASE + path, {method:'GET'});
+  return await r.text();
+}
+async function apiPostRaw(path, body){
+  const r = await fetch(BASE + path, {
+    method:'POST',
+    headers:{'Content-Type':'application/octet-stream'},
+    body: body
+  });
+  return await r.text();
+}
+
+async function ping(){
+  const t = val('token');
+  if (!t) return showOut('先填 token', false);
+  try{
+    const s = await apiGet('/api/status');
+    showOut('设备可达 ✓\n' + s, true);
+  }catch(e){ showOut('连不上设备：' + e.message + '\n检查是否连着这个设备的 WiFi', false); }
+}
+
+async function run(cmdFromBtn){
+  const t = val('token');
+  if (!t) return showOut('先填 token', false);
+  const cmd = (typeof cmdFromBtn === 'string') ? cmdFromBtn : val('cmd');
+  if (!cmd) return showOut('命令为空', false);
+  showOut('执行中…', true);
+  try{
+    const r = await apiGet('/api/exec?token=' + esc(t) + '&cmd=' + esc(cmd));
+    let j = null;
+    try{ j = JSON.parse(r); }catch(e){}
+    if (j) showOut('$ ' + cmd + '\nrc=' + j.rc + '\n\n' + (j.out || '(无输出)'), j.ok);
+    else  showOut(r, false);
+  }catch(e){ showOut('请求失败：' + e.message, false); }
+}
+
+async function readFile(){
+  const t = val('token');
+  if (!t) return showUp('先填 token');
+  try{
+    const r = await apiGet('/api/file?token=' + esc(t) + '&path=' + esc(val('dpath')));
+    const j = JSON.parse(r);
+    showUp(j.ok ? ('大小 ' + j.size + ' 字节\n\n' + j.content) : ('失败：' + j.msg));
+  }catch(e){ showUp('请求失败：' + e.message); }
+}
+
+async function upload(appended){
+  const t = val('token');
+  const f = $('file').files[0];
+  const p = val('dpath');
+  if (!t) return showUp('先填 token');
+  if (!f) return showUp('先选择文件');
+  if (!p) return showUp('先填目标路径');
+  try{
+    const text = await f.text();
+    const CH = 7000;
+    let total = 0;
+    for (let off = 0; off < text.length || off === 0; off += CH){
+      const chunk = text.slice(off, off + CH);
+      const ap = (appended || off > 0) ? 1 : 0;   // 首片按用户选择，后续强制追加
+      const r = await apiPostRaw('/api/file?token=' + esc(t) + '&path=' + esc(p) + '&append=' + ap, chunk);
+      const j = JSON.parse(r);
+      if (!j.ok){ showUp('第 ' + (Math.floor(off/CH)+1) + ' 片失败：' + j.msg); return; }
+      total += j.bytes;
+      showUp('上传中… ' + total + ' / ' + text.length + ' 字节');
+      if (text.length === 0) break;
+    }
+    showUp('上传完成 ✓\n文件 ' + f.name + ' → ' + p + '\n共 ' + total + ' 字节');
+  }catch(e){ showUp('上传失败：' + e.message); }
+}
+
+document.querySelectorAll('[data-cmd]').forEach(b=>{
+  b.addEventListener('click', ()=> run(b.getAttribute('data-cmd')));
+});
+</script>
+</body>
+</html>
