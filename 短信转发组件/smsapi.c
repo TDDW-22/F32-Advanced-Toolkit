@@ -10,6 +10,8 @@
  *   POST /api/save     webhook / secret / keyword / interval 保存并重启守护
  *   POST /api/action   do=start|stop|restart|once|test
  *   GET/POST /api/quota  配额总额读写；used_gb 取设备实时计数，POST 只存 total_gb
+ *   GET  /api/burn     当前 ICCID / 手动授权 / 烧流状态
+ *   POST /api/burn     iccid=手动 ICCID（必须与当前 ICCID 完全一致）或 action=stop
  *   GET  /api/netinfo  链路签约速率
  *   GET  /api/speedtest 设备端出站下行测速 + RTT
  *   POST /api/file?path=&token=&append=&exec=   原始 body 写入文件（手机端部署用）
@@ -51,6 +53,9 @@
 #define QUOTA_CONF     "/mnt/userdata/etc_rw/quota.conf"
 #define QUOTA_STAT     "/mnt/userdata/etc_rw/quota.status"
 #define QUOTA_BIN      "/mnt/userdata/etc_rw/quota"
+#define BURN_BIN       "/mnt/userdata/etc_rw/burnctl"
+#define BURN_MANUAL    "/tmp/burn_manual_iccid"
+#define BURN_INFO      "/mnt/userdata/etc_rw/burn_info.txt"
 #define BIN_USER       "/mnt/userdata/etc_rw/smsfwd"
 #define BIN_SYS        "/sbin/smsfwd"
 #define REQ_MAX        (32 * 1024)
@@ -664,6 +669,8 @@ static void send_resp(int fd, int code, const char *body) {
                    : code == 204 ? "No Content"
                    : code == 400 ? "Bad Request"
                    : code == 403 ? "Forbidden"
+                   : code == 409 ? "Conflict"
+                   : code == 503 ? "Service Unavailable"
                    : code == 500 ? "Internal Server Error"
                    : "Not Found";
     int n = snprintf(hdr, sizeof(hdr),
@@ -711,6 +718,107 @@ static int api_auth(const char *tk) {
         if (!conf_get("secret", want, sizeof(want)) || !want[0]) return -1;
     }
     return (tk && *tk && !strcmp(tk, want)) ? 1 : 0;
+}
+
+/* ------------------------------------------------------------ 烧流授权 */
+/* ICCID 只保留 0-9A-F 并转大写 */
+static void burn_hex_only(const char *in, char *out, int osz) {
+    int n = 0;
+    for (; *in && n < osz - 1; in++)
+        if (isxdigit((unsigned char)*in)) out[n++] = (char)toupper((unsigned char)*in);
+    out[n] = 0;
+}
+
+/* 取文本里第一段 18~20 位连续十六进制串（ICCID 可能含 A-F） */
+static int burn_first_hex(const char *s, char *out, int osz) {
+    const char *p = s;
+    while (*p) {
+        if (isxdigit((unsigned char)*p)) {
+            const char *q = p;
+            while (isxdigit((unsigned char)*q)) q++;
+            int n = (int)(q - p);
+            if (n >= 18 && n <= 20) {
+                if (n >= osz) n = osz - 1;
+                for (int i = 0; i < n; i++) out[i] = (char)toupper((unsigned char)p[i]);
+                out[n] = 0;
+                return 1;
+            }
+            p = q;
+        } else p++;
+    }
+    return 0;
+}
+
+/* 执行 burnctl 子命令并取第一行输出；用于 probe/reload/start */
+static int burn_cmd(const char *arg, char *out, int osz) {
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "%s %s 2>&1", BURN_BIN, arg);
+    out[0] = 0;
+    signal(SIGCHLD, SIG_DFL);
+    FILE *pp = popen(cmd, "r");
+    if (!pp) { signal(SIGCHLD, SIG_IGN); return -1; }
+    if (fgets(out, osz, pp)) {
+        char *e = out + strlen(out);
+        while (e > out && (e[-1] == '\r' || e[-1] == '\n' || e[-1] == ' ')) *--e = 0;
+    }
+    pclose(pp);
+    signal(SIGCHLD, SIG_IGN);
+    return out[0] ? 0 : -1;
+}
+
+/* 当前设备实际 ICCID；读不到返回 0 */
+static int burn_live_iccid(char *out, int osz) {
+    char raw[256] = "";
+    out[0] = 0;
+    if (burn_cmd("probe", raw, sizeof(raw)) != 0) return 0;
+    if (!burn_first_hex(raw, out, osz)) return 0;
+    return 1;
+}
+
+/* 读取网页已保存的手动 ICCID；无效/不存在返回空 */
+static void burn_read_manual(char *out, int osz) {
+    out[0] = 0;
+    FILE *f = fopen(BURN_MANUAL, "r");
+    if (!f) return;
+    char line[128];
+    if (fgets(line, sizeof(line), f)) {
+        char d[32];
+        burn_hex_only(line, d, sizeof(d));
+        if (strlen(d) >= 18 && strlen(d) <= 20)
+            snprintf(out, osz, "%s", d);
+    }
+    fclose(f);
+}
+
+/* 写手动 ICCID；成功 0，失败 -1 */
+static int burn_write_manual(const char *iccid) {
+    FILE *f = fopen(BURN_MANUAL, "w");
+    if (!f) return -1;
+    fprintf(f, "%s\n", iccid);
+    fclose(f);
+    chmod(BURN_MANUAL, 0600);
+    return 0;
+}
+
+/* 从 burn_info.txt 第二列读烧流状态；读不到 -1 */
+static int burn_read_state(void) {
+    FILE *f = fopen(BURN_INFO, "r");
+    if (!f) return -1;
+    char line[128] = "";
+    int st = -1;
+    if (fgets(line, sizeof(line), f)) {
+        char *p = strchr(line, '|');
+        if (p) st = atoi(p + 1);
+    }
+    fclose(f);
+    return st;
+}
+
+/* 授权变化后让守护重新判定；若守护没起则拉起 */
+static void burn_apply(void) {
+    char ignored[128];
+    burn_cmd("reload", ignored, sizeof(ignored));
+    burn_cmd("start", ignored, sizeof(ignored));
 }
 
 static void handle_client(int fd) {
@@ -967,6 +1075,80 @@ static void handle_client(int fd) {
             snprintf(out, BODY_MAX, "{\"ok\":true,\"msg\":\"%s\",\"running\":%d}", msg, daemon_pid() > 0);
         }
         apilog("action %s rc=%d", act, rc);
+        send_resp(fd, 200, out);
+        goto done;
+    }
+
+
+    /* ---------- 烧流：手动 ICCID 授权 ---------- */
+    if (!strcmp(path, "/api/burn") && !strcmp(method, "GET")) {
+        char cur[32] = "", manual[32] = "";
+        int probe_ok = burn_live_iccid(cur, sizeof(cur));
+        burn_read_manual(manual, sizeof(manual));
+        int match = (probe_ok && manual[0] && !strcmp(cur, manual));
+        int st = burn_read_state();
+        snprintf(out, BODY_MAX,
+            "{\"ok\":true,\"probe_ok\":%d,\"current\":\"%s\",\"manual\":\"%s\","
+            "\"match\":%d,\"burning\":%d}",
+            probe_ok, cur, manual, match, st == 1 ? 1 : 0);
+        send_resp(fd, 200, out);
+        goto done;
+    }
+
+    if (!strcmp(path, "/api/burn") && !strcmp(method, "POST")) {
+        char act[32] = "", raw[64] = "", cur[32] = "", norm[32] = "";
+        get_param(payload, "action", act, sizeof(act));
+        get_param(payload, "iccid", raw, sizeof(raw));
+
+        if (!strcmp(act, "stop")) {
+            unlink(BURN_MANUAL);
+            char ignored[128];
+            burn_cmd("reload", ignored, sizeof(ignored));
+            snprintf(out, BODY_MAX, "{\"ok\":true,\"msg\":\"已停止烧流并清除手动授权\"}");
+            apilog("burn: manual auth cleared");
+            send_resp(fd, 200, out);
+            goto done;
+        }
+        if (act[0]) {
+            send_resp(fd, 400, "{\"ok\":false,\"msg\":\"未知动作\"}");
+            goto done;
+        }
+
+        burn_hex_only(raw, norm, sizeof(norm));
+        if (strlen(norm) < 18 || strlen(norm) > 20) {
+            send_resp(fd, 400, "{\"ok\":false,\"msg\":\"ICCID 需为 18~20 位十六进制\"}");
+            goto done;
+        }
+        if (!burn_live_iccid(cur, sizeof(cur))) {
+            unlink(BURN_MANUAL);
+            char ignored[128];
+            burn_cmd("reload", ignored, sizeof(ignored));
+            send_resp(fd, 503, "{\"ok\":false,\"msg\":\"读不到设备当前 ICCID，已拒绝授权\"}");
+            apilog("burn: probe failed, auth rejected");
+            goto done;
+        }
+        if (strcmp(norm, cur) != 0) {
+            unlink(BURN_MANUAL);
+            char ignored[128];
+            burn_cmd("reload", ignored, sizeof(ignored));
+            snprintf(out, BODY_MAX,
+                "{\"ok\":false,\"msg\":\"ICCID 不一致，已拒绝\",\"current\":\"%s\",\"input\":\"%s\"}",
+                cur, norm);
+            apilog("burn: mismatch input=%s current=%s", norm, cur);
+            send_resp(fd, 409, out);
+            goto done;
+        }
+        if (burn_write_manual(norm) != 0) {
+            send_resp(fd, 500, "{\"ok\":false,\"msg\":\"写入授权失败(目录只读或无权限)\"}");
+            goto done;
+        }
+        burn_apply();
+        int st = burn_read_state();
+        snprintf(out, BODY_MAX,
+            "{\"ok\":true,\"msg\":\"ICCID 一致，已授权\",\"current\":\"%s\","
+            "\"manual\":\"%s\",\"match\":1,\"burning\":%d}",
+            cur, norm, st == 1 ? 1 : 0);
+        apilog("burn: manual auth OK iccid=%s", norm);
         send_resp(fd, 200, out);
         goto done;
     }

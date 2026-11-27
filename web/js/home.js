@@ -62,3 +62,24 @@ function bind(){
 }
 setInterval(bind,2000);bind();
 })();
+;(function(){
+function fmtMB(b){b=Number(b)||0;return (b/1048576).toFixed(2)+' MB';}
+function poll(){
+  var x=new XMLHttpRequest();
+  x.open('GET','/js/burn_info.txt?r='+(new Date().getTime()),true);
+  x.onreadystatechange=function(){
+    if(x.readyState!==4||x.status!==200)return;
+    var p=x.responseText.replace(/\n/g,'').split('|');
+    if(p.length<4)return;
+    var total=Number(p[0])||0,state=p[1],last=Number(p[2])||0,imsi=p[3]||'';
+    var s=document.getElementById('burn_state');
+    if(s){s.textContent=state==='1'?'烧流中':'空闲';s.style.color=state==='1'?'#7CFF6B':'#fff';}
+    var t=document.getElementById('burn_total');
+    if(t)t.textContent=fmtMB(total);
+    var l=document.getElementById('burn_last');
+    if(l)l.textContent='最近一轮 '+(last>0?fmtMB(last):'--')+' · 授权卡 '+(imsi||'未授权');
+  };
+  x.send();
+}
+poll();setInterval(poll,2000);
+})();

@@ -16,6 +16,7 @@
                                                                                              class="cFFCE2B"
                                                                                              data-trans="dtu_setting"></a>
             </li>
+        <li><a href="#burn" class="cFFCE2B">空闲烧流量</a></li>
         </ul>
     </div>
 </div>
@@ -121,6 +122,16 @@
             </div>
             <button id="quota_save" type="button" class="quota-save">保存</button>
             <span id="quota_msg" style="margin-left:8px"></span>
+            <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.25);padding-top:12px;padding-right:18px">
+                <div style="font-size:15px;opacity:.9;line-height:24px">
+                    空闲烧流量统计
+                    <span id="burn_state" style="font-size:16px;font-weight:bold;float:right">--</span>
+                </div>
+                <div id="burn_total" style="font-size:26px;font-weight:bold;line-height:1.3">0.00 MB</div>
+                <div style="font-size:12px;opacity:.8;margin-top:2px">累计烧流（重启不清零）</div>
+                <div id="burn_last" style="font-size:12px;opacity:.8;margin-top:6px;word-break:break-all">--</div>
+                <div style="margin-top:8px"><a href="#burn" style="color:#fff;font-size:13px;text-decoration:underline">查看烧流量详情 ›</a></div>
+            </div>
         </div>
     </div>
 
