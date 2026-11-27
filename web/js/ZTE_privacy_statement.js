@@ -1,1 +1,0 @@
-define(["knockout","service","jquery","config/config","underscore"],function(d,a,e,c,b){return{init:function(){}}});

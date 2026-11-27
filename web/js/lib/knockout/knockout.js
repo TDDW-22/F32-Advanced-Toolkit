@@ -1,1 +1,0 @@
-define(["knockoutbase"],function(a){return a.bindingHandlers.slide={update:function(c,d){var e=a.utils.unwrapObservable(d()),b=!("none"==c.style.display);e&&!b?$(c).slideDown():!e&&b&&$(c).slideUp()}},window.ko=a,require(["lib/knockout/knockout.simpleGrid"]),a});
