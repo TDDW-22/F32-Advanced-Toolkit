@@ -62,4 +62,3 @@ function bind(){
 }
 setInterval(bind,2000);bind();
 })();
-})();

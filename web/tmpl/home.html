@@ -7,7 +7,6 @@
             <li data-bind="visible: hasNetworkSettings"><a href="#network_settings" class="c0EC6DC"
                                                            data-trans="network_settings"></a></li>
             <li data-bind="visible: hasSms"><a href="#sms" class="cF53A58" data-trans="sms"></a></li>
-            <li data-bind="hasIMEI"><a href="#advance3112" class="c00AEFF" data-trans="改串"></a></li>
             <li data-bind="visible: isSupportSD"><a href="#sdcard" class="c2175FF" data-trans="sd"></a></li>
             <li><a data-bind="attr: {href: notDataCard&&sleepmode_display? '#sleep_mode' : '#router_setting'}" class="cFFCE2B"
                    data-trans="advanced_settings"></a></li>
@@ -99,7 +98,7 @@
         </div>
         <div class="statistics_list" style="margin-top:-10px;font-size:15px">
             <ul>
-                <li><a href="#traffic_alert">
+                <li>
                     <div data-bind="visible: trafficAlertEnable">
                         <span class="line-height-20" style="font-size:15px" data-bind="text: trafficLimited"></span>
                         <span class="line-height-20" style="font-size:15px" data-trans="traffic_limit_data"></span>
@@ -107,7 +106,7 @@
                     <div data-bind="visible: trafficAlertEnable() == false">
                         <div class="line-height-20" style="font-size:15px" data-trans="traffic_not_set_limited"></div>
                     </div>
-                </a></li>
+                </li>
             </ul>
         </div>
         <div id="quota_edit_row" style="margin-top:12px;padding-left:20px;font-size:14px;color:#fff">
