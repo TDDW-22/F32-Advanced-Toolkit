@@ -21,11 +21,12 @@ define(["jquery"],function($){
     }
     function renderAuth(){
         if(!auth){return;}
+        var cur=(auth.current||"").toUpperCase().replace(/[^0-9A-F]/g,"");
+        var prefix=cur.length>=18&&cur.length<=20?cur.slice(0,-4):"";
         $("#burnCurrentIccid").text(auth.current||"读取失败");
         $("#burnSavedIccid").text(auth.manual||"未授权");
         $("#burnImsi").text(auth.manual||"未授权");
-        var inp=$("#burnIccidInput");
-        if(!inp.val() && auth.manual){inp.val(auth.manual);}
+        $("#burnIccidPrefix").val(prefix);
     }
     function loadAuth(showMsg){
         if(!alive()){return;}
@@ -41,14 +42,24 @@ define(["jquery"],function($){
         })
         .fail(function(){
             $("#burnCurrentIccid").text("接口未响应");
+            $("#burnIccidPrefix").val("");
             if(showMsg){setMsg("烧流授权接口未响应，请检查 smsapi 是否运行。","err");}
         });
     }
     function submitAuth(){
-        var raw=$("#burnIccidInput").val()||"";
-        var v=raw.toUpperCase().replace(/[^0-9A-F]/g,"");
+        var prefix=($("#burnIccidPrefix").val()||"").toUpperCase().replace(/[^0-9A-F]/g,"");
+        var suffix=($("#burnIccidInput").val()||"").toUpperCase().replace(/[^0-9A-F]/g,"");
+        if(prefix.length<14||prefix.length>16){
+            setMsg("设备 ICCID 前段未读取，请刷新页面后再填后 4 位。","err");
+            return;
+        }
+        if(suffix.length!==4){
+            setMsg("请填写 ICCID 后 4 位（0-9、A-F）。","err");
+            return;
+        }
+        var v=prefix+suffix;
         if(v.length<18||v.length>20){
-            setMsg("ICCID 需为 18~20 位十六进制（0-9、A-F）。","err");
+            setMsg("拼接后的 ICCID 长度不正确，请刷新页面重试。","err");
             return;
         }
         setBusy(true);
@@ -59,7 +70,7 @@ define(["jquery"],function($){
             auth=r||auth;
             renderAuth();
             if(r&&r.ok){
-                setMsg("ICCID 一致，已授权。局域网无终端时自动开始烧流。","ok");
+                setMsg("后 4 位与设备一致，已授权。局域网无终端时自动开始烧流。","ok");
             }else{
                 setMsg((r&&r.msg)||"授权失败。","err");
             }
@@ -84,6 +95,7 @@ define(["jquery"],function($){
         .done(function(r){
             setBusy(false);
             auth={ok:true,current:auth?auth.current:"",manual:"",match:0,probe_ok:1};
+            $("#burnIccidInput").val("");
             renderAuth();
             setMsg((r&&r.msg)||"已停止并清除授权。","ok");
             load();

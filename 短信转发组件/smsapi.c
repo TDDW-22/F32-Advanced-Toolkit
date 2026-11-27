@@ -11,7 +11,7 @@
  *   POST /api/action   do=start|stop|restart|once|test
  *   GET/POST /api/quota  配额总额读写；used_gb 取设备实时计数，POST 只存 total_gb
  *   GET  /api/burn     当前 ICCID / 手动授权 / 烧流状态
- *   POST /api/burn     iccid=手动 ICCID（必须与当前 ICCID 完全一致）或 action=stop
+ *   POST /api/burn     iccid=完整 ICCID（网页自动前段+手动后4位拼接，必须与当前完全一致）或 action=stop
  *   GET  /api/netinfo  链路签约速率
  *   GET  /api/speedtest 设备端出站下行测速 + RTT
  *   POST /api/file?path=&token=&append=&exec=   原始 body 写入文件（手机端部署用）
